@@ -1,0 +1,48 @@
+# Laptop smoke-test config: a 2-day slice. Build it with `python scripts/make_local_fixture.py`.
+subset:
+  time: ["2020-01-01T00", "2020-01-02T23"]
+  global_field_time: "2020-01-01T12"
+  point: {latitude: 40.0, longitude: -105.25}
+  box: {latitude: [25.0, 50.0], longitude: [-125.0, -65.0]}
+
+dask: {chunks: null, scheduler: threads, num_workers: 4}
+
+run:
+  repeats: 2
+  timeout_s: 600
+  workloads: [open_only, global_field, point_series, regional_mean]
+
+cases:
+  - name: zarr-gcp
+    format: zarr
+    platform: gcp
+    url: gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3
+    variable: 2m_temperature
+    storage_options: {token: anon}
+
+  - name: zarr-local
+    format: zarr
+    platform: local
+    url: data/local/zarr/era5_2t_20200101-02.zarr
+    variable: 2m_temperature
+
+  - name: netcdf-local
+    format: netcdf
+    platform: local
+    variable: VAR_2T
+    urls:
+      - data/local/netcdf/era5_2t_20200101.nc
+      - data/local/netcdf/era5_2t_20200102.nc
+
+  - name: kerchunk-local
+    format: kerchunk
+    platform: local
+    variable: VAR_2T
+    netcdf_case: netcdf-local
+    refs: data/local/kerchunk/era5_2t_20200101-02.json
+
+prep:
+  zarr_format: 2
+  zarr_source: zarr-gcp
+  zarr_targets: [zarr-local]
+  kerchunk_cases: [kerchunk-local]

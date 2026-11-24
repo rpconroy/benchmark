@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=64"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "era5bench"
+version = "0.1.0"
+description = "Benchmark ERA5 read speeds across formats and storage platforms"
+requires-python = ">=3.11"
+dependencies = ["xarray", "zarr", "dask", "fsspec", "pyyaml", "pandas"]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

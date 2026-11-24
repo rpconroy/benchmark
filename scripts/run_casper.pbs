@@ -1,0 +1,20 @@
+#!/bin/bash
+#PBS -N era5bench
+#PBS -A TODO_PROJECT
+#PBS -q casper
+#PBS -l select=1:ncpus=8:mem=64GB
+#PBS -l walltime=12:00:00
+#PBS -j oe
+# TODO(verify): project code, queue, resources. Keep ncpus == dask.num_workers in config/sites.yaml.
+#
+# Submit from the repo root:   qsub scripts/run_casper.pbs
+# Subset of cases/workloads:   qsub -v ARGS="--cases zarr-lustre netcdf-lustre --repeats 3" scripts/run_casper.pbs
+set -euo pipefail
+cd "${PBS_O_WORKDIR:-$(dirname "$0")/..}"
+
+module load conda
+conda activate era5bench
+
+echo "host=$(hostname) job=${PBS_JOBID:-none} start=$(date -Is)"
+python -m era5bench.runner -c config/sites.yaml ${ARGS:-}
+echo "end=$(date -Is)"

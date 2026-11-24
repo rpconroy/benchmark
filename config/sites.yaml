@@ -1,0 +1,138 @@
+# Casper benchmark configuration.
+# Values marked TODO(verify) are unconfirmed. Ask before changing them (see CLAUDE.md).
+# Verified 2026-11-23: TDS OPeNDAP paths, d633000 file names, VAR_2T, ARCO store layout.
+
+subset:
+  time: ["2020-01-01T00", "2020-02-29T23"]   # keep <= 2 months
+  global_field_time: "2020-01-15T12"
+  point: {latitude: 40.0, longitude: -105.25}   # Boulder, CO (converted to 0-360 automatically)
+  box: {latitude: [25.0, 50.0], longitude: [-125.0, -65.0]}   # CONUS
+
+dask:
+  # chunks: null -> no dask for zarr/kerchunk (zarr fetches chunks concurrently itself);
+  #                 multi-file netCDF (open_mfdataset) always uses dask on the files' on-disk chunks.
+  # chunks: {}   -> dask with on-disk chunks for every case.
+  chunks: null
+  scheduler: threads
+  num_workers: 8        # match the PBS ncpus request
+
+run:
+  repeats: 5
+  timeout_s: 1800
+  workloads: [open_only, global_field, point_series, regional_mean]
+
+# Shared settings (YAML anchors)
+x-paths:
+  boreas_anon: &boreas_anon {anon: true, endpoint_url: "https://boreas.hpc.ucar.edu"}
+
+cases:
+  # ---------------- zarr (ARCO-ERA5 chunking: time=1, full 721x1440 grid, blosc-lz4) ----
+  - name: zarr-gcp
+    format: zarr
+    platform: gcp
+    url: gs://gcp-public-data-arco-era5/ar/full_37-1h-0p25deg-chunk-1.zarr-v3   # TODO(verify) store choice
+    variable: 2m_temperature
+    storage_options: {token: anon}
+    notes: Full ARCO store; open time includes parsing metadata for ~270 variables.
+
+  - name: zarr-boreas
+    format: zarr
+    platform: boreas
+    url: s3://gdex-data2/era5bench/zarr/era5_2t_202001-202002.zarr   # TODO(verify) prefix
+    variable: 2m_temperature
+    storage_options: *boreas_anon
+
+  - name: zarr-campaign
+    format: zarr
+    platform: campaign
+    url: /glade/campaign/collections/gdex/data/exchange/benchmark_test/data/zarr/era5_2t_202001-202002.zarr
+    variable: 2m_temperature
+
+  - name: zarr-lustre
+    format: zarr
+    platform: lustre
+    url: /lustre/desc1/gdex/work/rpconroy/benchmark/zarr/era5_2t_202001-202002.zarr
+    variable: 2m_temperature
+
+  # ---------------- netCDF (d633000, NetCDF4 chunks 27x139x277) -------------------------
+  - name: netcdf-campaign
+    format: netcdf
+    platform: campaign
+    variable: VAR_2T
+    urls:
+      - /glade/campaign/collections/gdex/data/d633000/e5.oper.an.sfc/202001/e5.oper.an.sfc.128_167_2t.ll025sc.2020010100_2020013123.nc
+      - /glade/campaign/collections/gdex/data/d633000/e5.oper.an.sfc/202002/e5.oper.an.sfc.128_167_2t.ll025sc.2020020100_2020022923.nc
+
+  - name: netcdf-lustre
+    format: netcdf
+    platform: lustre
+    variable: VAR_2T
+    urls:
+      - /lustre/desc1/gdex/work/rpconroy/benchmark/netcdf/e5.oper.an.sfc.128_167_2t.ll025sc.2020010100_2020013123.nc
+      - /lustre/desc1/gdex/work/rpconroy/benchmark/netcdf/e5.oper.an.sfc.128_167_2t.ll025sc.2020020100_2020022923.nc
+
+  - name: netcdf-boreas
+    format: netcdf
+    platform: boreas
+    variable: VAR_2T
+    urls:
+      - s3://gdex-data2/era5bench/netcdf/e5.oper.an.sfc.128_167_2t.ll025sc.2020010100_2020013123.nc   # TODO(verify) prefix
+      - s3://gdex-data2/era5bench/netcdf/e5.oper.an.sfc.128_167_2t.ll025sc.2020020100_2020022923.nc
+    storage_options: *boreas_anon
+    open_options: {cache_type: readahead, block_size: 8388608}
+
+  - name: netcdf-tds
+    format: netcdf
+    platform: tds
+    variable: VAR_2T
+    engine: netcdf4   # OPeNDAP
+    urls:
+      - https://tds.gdex.ucar.edu/thredds/dodsC/files/d633000/e5.oper.an.sfc/202001/e5.oper.an.sfc.128_167_2t.ll025sc.2020010100_2020013123.nc
+      - https://tds.gdex.ucar.edu/thredds/dodsC/files/d633000/e5.oper.an.sfc/202002/e5.oper.an.sfc.128_167_2t.ll025sc.2020020100_2020022923.nc
+    # chunks: {time: 744, latitude: 721, longitude: 1440}   # optional: fewer, larger DAP requests
+    notes: >-
+      Default = dask on the native 27x139x277 chunks, i.e. many small DAP requests. Large requests may
+      hit the TDS OPeNDAP response-size limit. From a laptop: ~80 s to open per file, ~30 s per timestep.
+
+  # ---------------- kerchunk (refs -> the netCDF files above) ---------------------------
+  - name: kerchunk-campaign
+    format: kerchunk
+    platform: campaign
+    variable: VAR_2T
+    netcdf_case: netcdf-campaign
+    refs: /glade/campaign/collections/gdex/data/exchange/benchmark_test/data/kerchunk/era5_2t_202001-202002.campaign.json
+
+  - name: kerchunk-lustre
+    format: kerchunk
+    platform: lustre
+    variable: VAR_2T
+    netcdf_case: netcdf-lustre
+    refs: /lustre/desc1/gdex/work/rpconroy/benchmark/kerchunk/era5_2t_202001-202002.lustre.json
+
+  - name: kerchunk-boreas
+    format: kerchunk
+    platform: boreas
+    variable: VAR_2T
+    netcdf_case: netcdf-boreas
+    refs: s3://gdex-data2/era5bench/kerchunk/era5_2t_202001-202002.boreas.json   # TODO(verify) prefix
+    refs_storage_options: *boreas_anon
+
+  - name: kerchunk-gdex-published
+    format: kerchunk
+    platform: campaign
+    enabled: false   # TODO(verify) location/format of the GDEX-published d633000 refs
+    variable: VAR_2T
+    netcdf_case: netcdf-campaign
+    refs: TODO
+    notes: Existing GDEX refs. Enable once the path is known (and check what files they point at).
+
+prep:
+  zarr_format: 2          # same as ARCO
+  zarr_source: zarr-gcp
+  zarr_targets: [zarr-lustre, zarr-campaign, zarr-boreas]   # first is copied from GCS, the rest from it
+  netcdf_source: netcdf-campaign
+  netcdf_targets: [netcdf-lustre, netcdf-boreas]
+  kerchunk_cases: [kerchunk-campaign, kerchunk-lustre, kerchunk-boreas]
+  write_options:
+    # Credentials for writing to Boreas: an AWS profile (in ~/.aws/credentials) or AWS_* env vars.
+    boreas: {profile: boreas, endpoint_url: "https://boreas.hpc.ucar.edu"}   # TODO(verify) profile name

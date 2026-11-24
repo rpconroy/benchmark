@@ -1,0 +1,22 @@
+name: era5bench
+channels:
+  - conda-forge
+dependencies:
+  - python>=3.11
+  - xarray
+  - zarr
+  - dask
+  - numpy
+  - pandas
+  - netcdf4
+  - h5netcdf
+  - h5py
+  - fsspec
+  - s3fs
+  - gcsfs
+  - aiohttp
+  - kerchunk
+  - ujson
+  - pyyaml
+  - pytest
+  - pip
